@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+package api;
+
+service PrivateFileStore {
+    rpc GetInfo(GetInfoRequest) returns (GetInfoResponse);
+    rpc ListFiles(ListFilesRequest) returns (ListFilesResponse);
+    rpc UploadFile (stream UploadFileRequest) returns (stream UploadFileResponse);
+    rpc DownloadFile(DownloadFileRequest) returns (stream DownloadFileResponse);
+}
+message GetInfoRequest {
+
+}
+
+message GetInfoResponse {
+    FeeReport fee_report = 1;
+}
+
+message ListFilesRequest {
+
+}
+message ListFilesResponse {
+    repeated FileSlot files = 1;
+}
+message UploadFileRequest {
+    oneof event{
+        NewFileSlot slot = 1;
+        FileChunk chunk = 2;
+        Empty finished = 3;
+    }
+}
+
+message UploadFileResponse {
+    oneof event {
+        InvoiceResponse invoice = 1;
+        FileSlot finished_backup = 2;
+    }
+}
+
+message DownloadFileRequest {
+    string file_id = 1;
+}
+
+message DownloadFileResponse {
+    oneof event {
+        InvoiceResponse invoice = 1;
+        FileChunk chunk = 2;
+        Empty finished = 3;
+    }
+}
+
+message FeeReport {
+    int64 msat_base_cost = 1;
+    int64 msat_per_uploaded_byte = 2;
+    int64 msat_per_day = 3;
+    int64 msat_per_download_byte = 4;
+}
+
+message FileSlot {
+    string id = 1;
+    string description = 2;
+    int64 creation_date = 3;
+    int64 deletion_date = 4;
+    int64 byte_count = 5;
+}
+
+message NewFileSlot {
+    int64 deletion_date = 1;
+    string description = 2;
+}
+
+message FileChunk {
+    bytes content = 1;
+}
+
+message InvoiceResponse {
+    string invoice = 1;
+}
+
+message Empty {}
