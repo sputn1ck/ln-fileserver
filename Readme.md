@@ -7,7 +7,8 @@ The main goal is to store channel backups, so that users are able to restore the
 ## howto
 - install with ```go get github.com/sputn1ck/ln-fileserver/...```
 - run with ```ln-fileserver --lndconnect="LND_CONNECT_STRING" --data_dir="path/to/data/dir" --grpc_port=9090```
-- the cli tool is still wip
+- cli can be run with ```lnfscli```
+- it always need the lndconnect string ```lnfscli --lndconnect="LND_CONNECT_STRING getinfo``` (you can create an alias)
 ## fees
 
 current fee options are:
@@ -17,19 +18,20 @@ current fee options are:
 - msat_per_downloaded_k_b -> msats per kilobyte downloaded
 
 ## upload
-
+```
 create File slot ->
 <- Creation Invoice (base Cost)
-for uploading{
+Pay ->
+for uploading {
     Chunk ->
-    <- Chunk Invoice
+    <- Chunk Invoice  
     Pay ->
 }
 Finished ->
 <- FileSlot Info
-
+```
 ## download
-
+```
 download request->
 <- FileSlot Info
 for downloading {
@@ -38,3 +40,4 @@ for downloading {
     <- Chunk
 }
 <- Finished
+```
