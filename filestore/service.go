@@ -12,14 +12,13 @@ import (
 	"time"
 )
 
-
 type UserConfigStore interface {
 	Create(ctx context.Context, pubkey string) (*UserConfig, error)
 	Read(ctx context.Context, pubkey string) (*UserConfig, error)
-	Update (ctx context.Context, config *UserConfig) error
+	Update(ctx context.Context, config *UserConfig) error
 }
-type Service struct{
-	store UserConfigStore
+type Service struct {
+	store   UserConfigStore
 	baseDir string
 }
 
@@ -68,7 +67,7 @@ func (s *Service) NewFile(ctx context.Context, pubkey string, filename string, d
 		FileName:     filename,
 		Description:  description,
 		DeletionDate: deleteAt,
-		Id: uuid.NewV4().String(),
+		Id:           uuid.NewV4().String(),
 	}, nil
 
 }
@@ -80,7 +79,7 @@ func (s *Service) SaveFile(ctx context.Context, pubkey string, slot *FileSlot, f
 		return nil, err
 	}
 	// set Sha hash
-	_,err = file.Seek(0, io.SeekStart)
+	_, err = file.Seek(0, io.SeekStart)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +105,7 @@ func (s *Service) SaveFile(ctx context.Context, pubkey string, slot *FileSlot, f
 	return slot, nil
 }
 
-func (s *Service) GetFile(ctx context.Context, pubkey string, fileid string) (*FileSlot ,error) {
+func (s *Service) GetFile(ctx context.Context, pubkey string, fileid string) (*FileSlot, error) {
 	// Get User Config
 	userConfig, err := s.store.Read(ctx, pubkey)
 	if err != nil {

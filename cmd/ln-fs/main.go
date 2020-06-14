@@ -41,9 +41,9 @@ func init() {
 }
 func main() {
 	var (
-		lndconnect       string = viper.GetString("lndconnect")
-		grpcPort         uint64 = viper.GetUint64("grpc_port")
-		dataDir	string = viper.GetString("data_dir")
+		lndconnect string = viper.GetString("lndconnect")
+		grpcPort   uint64 = viper.GetUint64("grpc_port")
+		dataDir    string = viper.GetString("data_dir")
 	)
 
 	// Global context
@@ -81,19 +81,19 @@ func main() {
 
 	grpcSrv := grpc.NewServer(
 		grpc.UnaryInterceptor(
-		grpc_middleware.ChainUnaryServer(
-		lndUtils.UnaryServerPublicMethodsInterceptor(
-			"/api.PrivateFileStore/GetInfo",
-			),
-			lndUtils.UnaryServerAuthenticationInterceptor,
-		)),grpc.StreamInterceptor(
+			grpc_middleware.ChainUnaryServer(
+				lndUtils.UnaryServerPublicMethodsInterceptor(
+					"/api.PrivateFileStore/GetInfo",
+				),
+				lndUtils.UnaryServerAuthenticationInterceptor,
+			)), grpc.StreamInterceptor(
 			grpc_middleware.ChainStreamServer(
-			lndUtils.StreamServerAuthenticationInterceptor,
+				lndUtils.StreamServerAuthenticationInterceptor,
 			)))
 	fileserver := server.NewFileServer(fileService, lndService, &api.FeeReport{
-		MsatBaseCost:        1000,
-		MsatPerDownloadedKB: 1,
-		MsatPerHourPerKB: 1,
+		MsatBaseCost:        0,
+		MsatPerDownloadedKB: 0,
+		MsatPerHourPerKB:    0,
 	})
 	api.RegisterPrivateFileStoreServer(grpcSrv, fileserver)
 	go func() {

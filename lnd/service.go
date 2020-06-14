@@ -8,9 +8,8 @@ import (
 	"io"
 )
 
-
 type Service struct {
-	lnd lnrpc.LightningClient
+	lnd      lnrpc.LightningClient
 	invoices invoicesrpc.InvoicesClient
 }
 
@@ -20,7 +19,7 @@ func NewService(lnd lnrpc.LightningClient, invoices invoicesrpc.InvoicesClient) 
 func (s *Service) CreateListenInvoice(ctx context.Context, paymentChan chan *lnrpc.Invoice, invoice *lnrpc.Invoice) (string, error) {
 	invoiceRes, err := s.lnd.AddInvoice(ctx, invoice)
 	if err != nil {
-		return "",err
+		return "", err
 	}
 	go func() {
 		err := s.ListenPayment(ctx, paymentChan, invoiceRes.RHash)
@@ -33,7 +32,7 @@ func (s *Service) CreateListenInvoice(ctx context.Context, paymentChan chan *lnr
 
 }
 
-func (s *Service) ListenPayment(ctx context.Context, paymentChan chan *lnrpc.Invoice, paymentHash []byte) error{
+func (s *Service) ListenPayment(ctx context.Context, paymentChan chan *lnrpc.Invoice, paymentHash []byte) error {
 	stream, err := s.invoices.SubscribeSingleInvoice(ctx, &invoicesrpc.SubscribeSingleInvoiceRequest{
 		RHash: paymentHash,
 	})
@@ -42,21 +41,20 @@ func (s *Service) ListenPayment(ctx context.Context, paymentChan chan *lnrpc.Inv
 	}
 	for {
 		select {
-			case <-ctx.Done():
-				return nil
+		case <-ctx.Done():
+			return nil
 		default:
 			res, err := stream.Recv()
-			if err == io.EOF{
+			if err == io.EOF {
 				return nil
 			}
 			if err != nil {
 				return err
 			}
-			if res.State == lnrpc.Invoice_SETTLED{
+			if res.State == lnrpc.Invoice_SETTLED {
 				paymentChan <- res
 				return nil
 			}
 		}
 	}
 }
-

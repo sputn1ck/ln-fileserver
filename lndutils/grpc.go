@@ -13,7 +13,6 @@ import (
 )
 
 var (
-
 	errMissingMetadata  = status.Errorf(codes.InvalidArgument, "missing metadata")
 	errInvalidSignature = status.Errorf(codes.Unauthenticated, "invalid signature")
 	errMissingPubkey    = status.Errorf(codes.InvalidArgument, "missing pubkey in metadata")
@@ -25,7 +24,7 @@ type contextKey string
 const (
 	authKeyIsPublic = contextKey("auth-key")
 	lndPubkey       = contextKey("pubkey")
-	AuthMsg = "lndprivatefileserver"
+	AuthMsg         = "lndprivatefileserver"
 )
 
 // VerificationClient is a minimalistic lnrpc.LigningClient that is able

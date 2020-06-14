@@ -11,6 +11,7 @@
 /testdata
 /data
 /.idea
+/.idea/**
 
 vendor
 *.idea

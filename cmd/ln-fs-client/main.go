@@ -19,7 +19,7 @@ import (
 
 func init() {
 	pflag.String("lndconnect", "", "londconnect uri to lnd node")
-	pflag.String("target","localhost:9090","target fileserver")
+	pflag.String("target", "localhost:9090", "target fileserver")
 	if err := viper.BindPFlags(pflag.CommandLine); err != nil {
 		log.Panicf("could not bind pflags: %v", err)
 	}
@@ -32,8 +32,8 @@ func init() {
 }
 func main() {
 	var (
-		lndconnect       string = viper.GetString("lndconnect")
-		target string = viper.GetString("target")
+		lndconnect string = viper.GetString("lndconnect")
+		target     string = viper.GetString("target")
 	)
 
 	// Global context
@@ -69,12 +69,12 @@ func main() {
 	fmt.Printf("\t [FS] Files: %v", files)
 	fileSlot, err := UploadFile(ctx, lnfsclient, lndClient)
 	if err != nil {
-		fmt.Printf("\n [FS] ERROR: %v",err )
+		fmt.Printf("\n [FS] ERROR: %v", err)
 		return
 	}
 	err = DownloadFile(ctx, lnfsclient, lndClient, fileSlot.FileId)
 	if err != nil {
-		fmt.Printf("\n [FS] ERROR: %v",err )
+		fmt.Printf("\n [FS] ERROR: %v", err)
 		return
 	}
 }
@@ -83,52 +83,52 @@ func UploadFile(ctx context.Context, lnfs api.PrivateFileStoreClient, lnd lnrpc.
 	// open file
 	file, err := os.Open("./testdata/upload/foo.exe")
 	if err != nil {
-		return nil,fmt.Errorf("Error opening file %v", err)
+		return nil, fmt.Errorf("Error opening file %v", err)
 	}
 	stream, err := lnfs.UploadFile(ctx)
 	if err != nil {
-		return nil,fmt.Errorf("Error opening stream %v", err)
+		return nil, fmt.Errorf("Error opening stream %v", err)
 	}
 	// create chunk buffer with 1mb
 	buf := make([]byte, 1024*1024)
 
 	// send opening request
-	err = stream.Send(&api.UploadFileRequest{Event:&api.UploadFileRequest_Slot{Slot:&api.NewFileSlot{
+	err = stream.Send(&api.UploadFileRequest{Event: &api.UploadFileRequest_Slot{Slot: &api.NewFileSlot{
 		DeletionDate: time.Now().UTC().Unix() + 86400,
 		Filename:     filepath.Base(file.Name()),
 		Description:  "foo",
 	}}})
 	if err != nil {
-		return nil,fmt.Errorf("Error sending opening req %v", err)
+		return nil, fmt.Errorf("Error sending opening req %v", err)
 	}
 	res, err := stream.Recv()
 	if err != nil {
-		return nil,fmt.Errorf("Error receiving %v", err)
+		return nil, fmt.Errorf("Error receiving %v", err)
 	}
 	invoice := res.GetInvoice()
 	fmt.Printf("[FS] > received invoice %s", invoice)
 	// pay invoice
 	if invoice.Invoice != "free" {
-		payment, err := lnd.SendPaymentSync(ctx, &lnrpc.SendRequest{PaymentRequest:invoice.Invoice})
+		payment, err := lnd.SendPaymentSync(ctx, &lnrpc.SendRequest{PaymentRequest: invoice.Invoice})
 		if err != nil {
 			return nil, err
 		}
 		if payment.PaymentError != "" {
-			return nil,fmt.Errorf("Payment failed %s", payment.PaymentError)
+			return nil, fmt.Errorf("Payment failed %s", payment.PaymentError)
 		}
 	}
 	writing := true
 	for writing {
 		n, err := file.Read(buf)
-		if err == io.EOF{
+		if err == io.EOF {
 			writing = false
 			break
 		}
-		err = stream.Send(&api.UploadFileRequest{Event:&api.UploadFileRequest_Chunk{Chunk:&api.FileChunk{
-			Content:buf[:n],
+		err = stream.Send(&api.UploadFileRequest{Event: &api.UploadFileRequest_Chunk{Chunk: &api.FileChunk{
+			Content: buf[:n],
 		}}})
 		if err != nil {
-			return nil,fmt.Errorf("\n [FS] > Error sending chunk req %v", err)
+			return nil, fmt.Errorf("\n [FS] > Error sending chunk req %v", err)
 		}
 		res, err := stream.Recv()
 		if err != nil {
@@ -140,22 +140,22 @@ func UploadFile(ctx context.Context, lnfs api.PrivateFileStoreClient, lnd lnrpc.
 		// pay invoice
 		// pay invoice
 		if invoice.Invoice != "free" {
-			payment, err := lnd.SendPaymentSync(ctx, &lnrpc.SendRequest{PaymentRequest:invoice.Invoice})
+			payment, err := lnd.SendPaymentSync(ctx, &lnrpc.SendRequest{PaymentRequest: invoice.Invoice})
 			if err != nil {
-				return  nil,err
+				return nil, err
 			}
 			if payment.PaymentError != "" {
-				return nil,fmt.Errorf("Payment failed %s", payment.PaymentError)
+				return nil, fmt.Errorf("Payment failed %s", payment.PaymentError)
 			}
 		}
 	}
-	err = stream.Send(&api.UploadFileRequest{Event:&api.UploadFileRequest_Finished{Finished: &api.Empty{}}})
+	err = stream.Send(&api.UploadFileRequest{Event: &api.UploadFileRequest_Finished{Finished: &api.Empty{}}})
 	if err != nil {
-		return nil,fmt.Errorf("\n[FS] > Error sending finished event %v", err)
+		return nil, fmt.Errorf("\n[FS] > Error sending finished event %v", err)
 	}
 	res, err = stream.Recv()
 	if err != nil {
-		return nil,fmt.Errorf("\n[FS] > Error receiving finished %v", err)
+		return nil, fmt.Errorf("\n[FS] > Error receiving finished %v", err)
 	}
 	finished := res.GetFinishedFile()
 	fmt.Printf("\n[FS] > finished filseslot %v", finished)
@@ -164,7 +164,7 @@ func UploadFile(ctx context.Context, lnfs api.PrivateFileStoreClient, lnd lnrpc.
 }
 
 func DownloadFile(ctx context.Context, lnfs api.PrivateFileStoreClient, lnd lnrpc.LightningClient, fileid string) error {
-	stream, err := lnfs.DownloadFile(ctx, &api.DownloadFileRequest{FileId:fileid})
+	stream, err := lnfs.DownloadFile(ctx, &api.DownloadFileRequest{FileId: fileid})
 	if err != nil {
 		return err
 	}
@@ -181,7 +181,7 @@ func DownloadFile(ctx context.Context, lnfs api.PrivateFileStoreClient, lnd lnrp
 		return err
 	}
 	defer file.Close()
-	Loop:
+Loop:
 	for {
 		select {
 		case <-ctx.Done():
@@ -195,7 +195,7 @@ func DownloadFile(ctx context.Context, lnfs api.PrivateFileStoreClient, lnd lnrp
 				return err
 			}
 
-			switch res.Event.(type){
+			switch res.Event.(type) {
 			case *api.DownloadFileResponse_Finished:
 				break Loop
 			case *api.DownloadFileResponse_Chunk:
@@ -205,12 +205,12 @@ func DownloadFile(ctx context.Context, lnfs api.PrivateFileStoreClient, lnd lnrp
 				}
 			case *api.DownloadFileResponse_Invoice:
 				invoice := res.GetInvoice().Invoice
-				if invoice == "free"{
+				if invoice == "free" {
 					continue
 				}
-				payment, err := lnd.SendPaymentSync(ctx, &lnrpc.SendRequest{PaymentRequest:invoice})
+				payment, err := lnd.SendPaymentSync(ctx, &lnrpc.SendRequest{PaymentRequest: invoice})
 				if err != nil {
-					return  err
+					return err
 				}
 				if payment.PaymentError != "" {
 					return fmt.Errorf("Payment failed %s", payment.PaymentError)
@@ -256,8 +256,7 @@ func GetPfContext(ctx context.Context, lnd lnrpc.LightningClient, msg *string) (
 	}
 	ctx = metadata.AppendToOutgoingContext(ctx, "pubkey", gi.IdentityPubkey)
 
-
-	sig, err := lnd.SignMessage(ctx, &lnrpc.SignMessageRequest{Msg:[]byte(*msg)})
+	sig, err := lnd.SignMessage(ctx, &lnrpc.SignMessageRequest{Msg: []byte(*msg)})
 	if err != nil {
 		return nil, err
 	}

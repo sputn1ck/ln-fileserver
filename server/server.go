@@ -14,22 +14,21 @@ import (
 	"time"
 )
 
-type FileServer struct{
-	fs *filestore.Service
+type FileServer struct {
+	fs  *filestore.Service
 	lnd *lnd2.Service
 
 	fees *api.FeeReport
 }
 
 func NewFileServer(fs *filestore.Service, lnd *lnd2.Service, fees *api.FeeReport) *FileServer {
-	return &FileServer{fs: fs, lnd: lnd, fees:fees}
+	return &FileServer{fs: fs, lnd: lnd, fees: fees}
 }
-
 
 func (f *FileServer) GetInfo(ctx context.Context, req *api.GetInfoRequest) (*api.GetInfoResponse, error) {
 	return &api.GetInfoResponse{
 		FeeReport: f.fees,
-	},nil
+	}, nil
 }
 
 func (f *FileServer) ListFiles(ctx context.Context, req *api.ListFilesRequest) (*api.ListFilesResponse, error) {
@@ -47,10 +46,10 @@ func (f *FileServer) ListFiles(ctx context.Context, req *api.ListFilesRequest) (
 		return nil, status.Error(codes.Unknown, err.Error())
 	}
 	var pbFileSlots []*api.FileSlot
-	for k,v := range fileSlots {
+	for k, v := range fileSlots {
 		pbFileSlots = append(pbFileSlots, f.YmlFileSlotToProto(k, v))
 	}
-	return &api.ListFilesResponse{Files:pbFileSlots}, nil
+	return &api.ListFilesResponse{Files: pbFileSlots}, nil
 }
 
 func (f *FileServer) UploadFile(srv api.PrivateFileStore_UploadFileServer) error {
@@ -74,7 +73,7 @@ func (f *FileServer) UploadFile(srv api.PrivateFileStore_UploadFileServer) error
 	if newFileSlot == nil {
 		return fmt.Errorf("Expected NewFileSlot")
 	}
-	if newFileSlot.DeletionDate < time.Now().UTC().Unix() + 3600 {
+	if newFileSlot.DeletionDate < time.Now().UTC().Unix()+3600 {
 		return fmt.Errorf("minimum store time is 1 hour")
 	}
 	cost := f.fees.MsatBaseCost
@@ -83,12 +82,12 @@ func (f *FileServer) UploadFile(srv api.PrivateFileStore_UploadFileServer) error
 	defer close(paymentChan)
 	if cost > 0 {
 		// Return CreationInvoice
-		invoice,err := f.lnd.CreateListenInvoice(srv.Context(), paymentChan, &lnrpc.Invoice{
+		invoice, err := f.lnd.CreateListenInvoice(srv.Context(), paymentChan, &lnrpc.Invoice{
 			Memo:      "Create Fileslot",
 			ValueMsat: f.fees.MsatBaseCost,
 			Expiry:    60,
 		})
-		err = srv.Send(&api.UploadFileResponse{Event:&api.UploadFileResponse_Invoice{Invoice:&api.InvoiceResponse{Invoice:invoice}}})
+		err = srv.Send(&api.UploadFileResponse{Event: &api.UploadFileResponse_Invoice{Invoice: &api.InvoiceResponse{Invoice: invoice}}})
 		if err != nil {
 			return err
 		}
@@ -96,12 +95,11 @@ func (f *FileServer) UploadFile(srv api.PrivateFileStore_UploadFileServer) error
 		// Wait for invoice paid
 		_ = <-paymentChan
 	} else {
-		err = srv.Send(&api.UploadFileResponse{Event:&api.UploadFileResponse_Invoice{Invoice:&api.InvoiceResponse{Invoice:"free"}}})
+		err = srv.Send(&api.UploadFileResponse{Event: &api.UploadFileResponse_Invoice{Invoice: &api.InvoiceResponse{Invoice: "free"}}})
 		if err != nil {
 			return err
 		}
 	}
-
 
 	// Create FileSlot
 	fileSlot, err := f.fs.NewFile(srv.Context(), pubkey[0], newFileSlot.Filename, newFileSlot.Description, newFileSlot.DeletionDate)
@@ -114,8 +112,8 @@ func (f *FileServer) UploadFile(srv api.PrivateFileStore_UploadFileServer) error
 		return err
 	}
 	defer fileWriter.Close()
-	Loop:
-	for  {
+Loop:
+	for {
 		req, err = srv.Recv()
 		if err == io.EOF {
 			return nil
@@ -124,7 +122,7 @@ func (f *FileServer) UploadFile(srv api.PrivateFileStore_UploadFileServer) error
 			return err
 		}
 
-		switch req.Event.(type){
+		switch req.Event.(type) {
 		case *api.UploadFileRequest_Finished:
 
 			fmt.Printf("\n \t [FS] Finished Upload")
@@ -138,18 +136,18 @@ func (f *FileServer) UploadFile(srv api.PrivateFileStore_UploadFileServer) error
 			hoursStored := (newFileSlot.DeletionDate - time.Now().UTC().Unix()) / 3600
 			msatCost := f.fees.MsatPerHourPerKB * hoursStored * (chunkKB + 1)
 
-			fmt.Printf("\n \t [FS] New Chunk; size: %v; cost: %v;",len(chunk.Content), msatCost )
+			fmt.Printf("\n \t [FS] New Chunk; size: %v; cost: %v;", len(chunk.Content), msatCost)
 			if msatCost > 0 {
 				if msatCost < 1000 {
 					msatCost = 1000
 				}
-				invoice,err := f.lnd.CreateListenInvoice(srv.Context(), paymentChan, &lnrpc.Invoice{
+				invoice, err := f.lnd.CreateListenInvoice(srv.Context(), paymentChan, &lnrpc.Invoice{
 					Memo:      "Uploading Chunk",
 					ValueMsat: msatCost,
 					Expiry:    60,
 				})
 				// Send Bytes Invoice
-				err = srv.Send(&api.UploadFileResponse{Event:&api.UploadFileResponse_Invoice{Invoice:&api.InvoiceResponse{Invoice:invoice}}})
+				err = srv.Send(&api.UploadFileResponse{Event: &api.UploadFileResponse_Invoice{Invoice: &api.InvoiceResponse{Invoice: invoice}}})
 				if err != nil {
 					return err
 				}
@@ -158,7 +156,7 @@ func (f *FileServer) UploadFile(srv api.PrivateFileStore_UploadFileServer) error
 				fmt.Printf("\n \t [FS] Invoice paid %v", payment)
 			} else {
 				// Send Bytes Invoice
-				err = srv.Send(&api.UploadFileResponse{Event:&api.UploadFileResponse_Invoice{Invoice:&api.InvoiceResponse{Invoice:"free"}}})
+				err = srv.Send(&api.UploadFileResponse{Event: &api.UploadFileResponse_Invoice{Invoice: &api.InvoiceResponse{Invoice: "free"}}})
 				if err != nil {
 					return err
 				}
@@ -170,7 +168,7 @@ func (f *FileServer) UploadFile(srv api.PrivateFileStore_UploadFileServer) error
 	if err != nil {
 		return err
 	}
-	err = srv.Send(&api.UploadFileResponse{Event:&api.UploadFileResponse_FinishedFile{FinishedFile:f.YmlFileSlotToProto(fileSlot.Id, fileSlot)}})
+	err = srv.Send(&api.UploadFileResponse{Event: &api.UploadFileResponse_FinishedFile{FinishedFile: f.YmlFileSlotToProto(fileSlot.Id, fileSlot)}})
 	if err != nil {
 		return err
 	}
@@ -178,7 +176,6 @@ func (f *FileServer) UploadFile(srv api.PrivateFileStore_UploadFileServer) error
 	return nil
 
 }
-
 
 func (f *FileServer) DownloadFile(req *api.DownloadFileRequest, srv api.PrivateFileStore_DownloadFileServer) error {
 	ctx := srv.Context()
@@ -192,7 +189,6 @@ func (f *FileServer) DownloadFile(req *api.DownloadFileRequest, srv api.PrivateF
 		return status.Error(codes.FailedPrecondition, fmt.Sprintf("unable to get pubkey from metadata"))
 	}
 
-
 	fmt.Printf("\n \t [FS] Requesting download %v", req.FileId)
 	// Get fileslot
 	fileSlot, err := f.fs.GetFile(ctx, pubkey[0], req.FileId)
@@ -204,7 +200,7 @@ func (f *FileServer) DownloadFile(req *api.DownloadFileRequest, srv api.PrivateF
 		return err
 	}
 	// open filereader
-	file, err := f.fs.GetFileReader(ctx,pubkey[0],req.FileId)
+	file, err := f.fs.GetFileReader(ctx, pubkey[0], req.FileId)
 	if err != nil {
 		return err
 	}
@@ -226,13 +222,13 @@ func (f *FileServer) DownloadFile(req *api.DownloadFileRequest, srv api.PrivateF
 			if msatCost < 1000 {
 				msatCost = 1000
 			}
-			invoice,err := f.lnd.CreateListenInvoice(srv.Context(), paymentChan, &lnrpc.Invoice{
+			invoice, err := f.lnd.CreateListenInvoice(srv.Context(), paymentChan, &lnrpc.Invoice{
 				Memo:      "Downloading chunk",
 				ValueMsat: msatCost,
 				Expiry:    60,
 			})
 			// Send Bytes Invoice
-			err = srv.Send(&api.DownloadFileResponse{Event:&api.DownloadFileResponse_Invoice{Invoice:&api.InvoiceResponse{Invoice:invoice}}})
+			err = srv.Send(&api.DownloadFileResponse{Event: &api.DownloadFileResponse_Invoice{Invoice: &api.InvoiceResponse{Invoice: invoice}}})
 			if err != nil {
 				return err
 			}
@@ -241,20 +237,20 @@ func (f *FileServer) DownloadFile(req *api.DownloadFileRequest, srv api.PrivateF
 			fmt.Printf("\n \t [FS] Invoice paid %v", payment)
 		} else {
 			// Send Bytes Invoice
-			err = srv.Send(&api.DownloadFileResponse{Event:&api.DownloadFileResponse_Invoice{Invoice:&api.InvoiceResponse{Invoice:"free"}}})
+			err = srv.Send(&api.DownloadFileResponse{Event: &api.DownloadFileResponse_Invoice{Invoice: &api.InvoiceResponse{Invoice: "free"}}})
 			if err != nil {
 				return err
 			}
 		}
-		err = srv.Send(&api.DownloadFileResponse{Event:&api.DownloadFileResponse_Chunk{Chunk:&api.FileChunk{
-			Content:buf[:n],
+		err = srv.Send(&api.DownloadFileResponse{Event: &api.DownloadFileResponse_Chunk{Chunk: &api.FileChunk{
+			Content: buf[:n],
 		}}})
 		if err != nil {
 			return fmt.Errorf("\n [FS] > Error sending chunk req %v", err)
 		}
 	}
 
-	err = srv.Send(&api.DownloadFileResponse{Event:&api.DownloadFileResponse_Finished{Finished:&api.Empty{}}})
+	err = srv.Send(&api.DownloadFileResponse{Event: &api.DownloadFileResponse_Finished{Finished: &api.Empty{}}})
 	if err != nil {
 		return err
 	}
@@ -265,7 +261,7 @@ func (f *FileServer) DownloadFile(req *api.DownloadFileRequest, srv api.PrivateF
 
 func (f *FileServer) YmlFileSlotToProto(id string, slot *filestore.FileSlot) *api.FileSlot {
 	return &api.FileSlot{
-		FileId: id,
+		FileId:       id,
 		Filename:     slot.FileName,
 		Description:  slot.Description,
 		ShaChecksum:  slot.Sha256Checksum,
