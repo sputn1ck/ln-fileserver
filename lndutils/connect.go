@@ -20,12 +20,12 @@ func NewLndConnectClient(ctx context.Context, lndconnect string) (lnrpc.Lightnin
 	uri := &url.URL{}
 	uri, err := uri.Parse(lndconnect)
 	if err != nil {
-		return nil, nil, err
+		return nil,  nil, err
 	}
 
 	address, mac, tlsCreds, err := LndConnect(uri)
 	if err != nil {
-		return nil, nil, err
+		return nil,  nil, err
 	}
 
 	macCred := NewMacaroonCredential(mac)

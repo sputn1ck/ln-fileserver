@@ -9,8 +9,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	"io"
-	"lndprivatefileserver/api"
-	"lndprivatefileserver/lndutils"
+	"ln-fileserver/api"
+	"ln-fileserver/lndutils"
 	"log"
 	"os"
 	"path/filepath"
@@ -41,15 +41,15 @@ func main() {
 	defer closeFunc()
 
 	// Connect to lnd node and create utils
-	log.Println("\t [MAIN] > connecting to lnd")
+	log.Println("\n [MAIN] > connecting to lnd")
 	lndClient, lnConn, err := lndutils.NewLndConnectClient(context.Background(), lndconnect)
 	if err != nil {
-		log.Panicf("\t [LND] > unable not connect: %v", err)
+		log.Panicf("\n [LND] > unable not connect: %v", err)
 	}
 	defer lnConn.Close()
 	_, err = lndClient.GetInfo(context.Background(), &lnrpc.GetInfoRequest{})
 	if err != nil {
-		log.Panicf("\t [LND] > can not get info: %v", err)
+		log.Panicf("\n [LND] > can not get info: %v", err)
 	}
 	msg := lndutils.AuthMsg
 	opts := []grpc.DialOption{
@@ -59,7 +59,7 @@ func main() {
 	}
 	conn, err := grpc.DialContext(ctx, target, opts...)
 	if err != nil {
-		log.Panicf("\t [Grpc] > can not connect: %v", err)
+		log.Panicf("\n[Grpc] > can not connect: %v", err)
 	}
 	defer conn.Close()
 	lnfsclient := api.NewPrivateFileStoreClient(conn)
@@ -67,7 +67,7 @@ func main() {
 	fmt.Printf("\t [FS] %v", res)
 	err = UploadFile(ctx, lnfsclient, lndClient)
 	if err != nil {
-		fmt.Printf("\t[FS] ERROR: %v",err )
+		fmt.Printf("\n [FS] ERROR: %v",err )
 	}
 }
 
@@ -75,14 +75,14 @@ func UploadFile(ctx context.Context, lnfs api.PrivateFileStoreClient, lnd lnrpc.
 	// open file
 	file, err := os.Open("./testdata/test.txt")
 	if err != nil {
-		return fmt.Errorf("[FS] > Error opening file %v", err)
+		return fmt.Errorf("Error opening file %v", err)
 	}
 	stream, err := lnfs.UploadFile(ctx)
 	if err != nil {
-		return fmt.Errorf("[FS] > Error opening stream %v", err)
+		return fmt.Errorf("Error opening stream %v", err)
 	}
-	// create chunk buffer
-	buf := make([]byte, 1024)
+	// create chunk buffer with 1mb
+	buf := make([]byte, 1024*1024)
 
 	// send opening request
 	err = stream.Send(&api.UploadFileRequest{Event:&api.UploadFileRequest_Slot{Slot:&api.NewFileSlot{
@@ -91,15 +91,24 @@ func UploadFile(ctx context.Context, lnfs api.PrivateFileStoreClient, lnd lnrpc.
 		Description:  "foo",
 	}}})
 	if err != nil {
-		return fmt.Errorf("[FS] > Error sending opening req %v", err)
+		return fmt.Errorf("Error sending opening req %v", err)
 	}
 	res, err := stream.Recv()
 	if err != nil {
-		return fmt.Errorf("[FS] > Error receiving %v", err)
+		return fmt.Errorf("Error receiving %v", err)
 	}
 	invoice := res.GetInvoice()
 	fmt.Printf("[FS] > received invoice %s", invoice)
 	// pay invoice
+	if invoice.Invoice != "free" {
+		payment, err := lnd.SendPaymentSync(ctx, &lnrpc.SendRequest{PaymentRequest:invoice.Invoice})
+		if err != nil {
+			return  err
+		}
+		if payment.PaymentError != "" {
+			return fmt.Errorf("Payment failed %s", payment.PaymentError)
+		}
+	}
 	writing := true
 	for writing {
 		n, err := file.Read(buf)
@@ -111,30 +120,41 @@ func UploadFile(ctx context.Context, lnfs api.PrivateFileStoreClient, lnd lnrpc.
 			Content:buf[:n],
 		}}})
 		if err != nil {
-			return fmt.Errorf("\t [FS] > Error sending chunk req %v", err)
+			return fmt.Errorf("\n [FS] > Error sending chunk req %v", err)
 		}
 		res, err := stream.Recv()
 		if err != nil {
-			return fmt.Errorf("\t [FS] > Error receiving %v", err)
+			return fmt.Errorf("\n [FS] > Error receiving %v", err)
 		}
 		invoice = res.GetInvoice()
 
-		fmt.Printf("\t [FS] > received invoice %s", invoice)
+		fmt.Printf("\n [FS] > received invoice %s", invoice)
 		// pay invoice
+		// pay invoice
+		if invoice.Invoice != "free" {
+			payment, err := lnd.SendPaymentSync(ctx, &lnrpc.SendRequest{PaymentRequest:invoice.Invoice})
+			if err != nil {
+				return  err
+			}
+			if payment.PaymentError != "" {
+				return fmt.Errorf("Payment failed %s", payment.PaymentError)
+			}
+		}
 	}
 	err = stream.Send(&api.UploadFileRequest{Event:&api.UploadFileRequest_Finished{Finished: &api.Empty{}}})
 	if err != nil {
-		return fmt.Errorf("\t[FS] > Error sending finished event %v", err)
+		return fmt.Errorf("\n[FS] > Error sending finished event %v", err)
 	}
 	res, err = stream.Recv()
 	if err != nil {
-		return fmt.Errorf("\t[FS] > Error receiving finished %v", err)
+		return fmt.Errorf("\n[FS] > Error receiving finished %v", err)
 	}
 	finished := res.GetFinishedFile()
-	fmt.Printf("\t[FS] > finished filseslot %v", finished)
+	fmt.Printf("\n[FS] > finished filseslot %v", finished)
 	return nil
 
 }
+
 func UnaryAuthenticationInterceptor(lnd lnrpc.LightningClient, msg *string) grpc.UnaryClientInterceptor {
 	return func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 		ctx, err := GetPfContext(ctx, lnd, msg)

@@ -8,28 +8,27 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"io"
-	"lndprivatefileserver/api"
-	"lndprivatefileserver/filestore"
+	"ln-fileserver/api"
+	"ln-fileserver/filestore"
+	lnd2 "ln-fileserver/lnd"
+	"time"
 )
 
 type FileServer struct{
 	fs *filestore.Service
-	lnd lnrpc.LightningClient
+	lnd *lnd2.Service
+
+	fees *api.FeeReport
 }
 
-func NewFileServer(fs *filestore.Service, lnd lnrpc.LightningClient) *FileServer {
-	return &FileServer{fs: fs, lnd: lnd}
+func NewFileServer(fs *filestore.Service, lnd *lnd2.Service, fees *api.FeeReport) *FileServer {
+	return &FileServer{fs: fs, lnd: lnd, fees:fees}
 }
 
 
 func (f *FileServer) GetInfo(ctx context.Context, req *api.GetInfoRequest) (*api.GetInfoResponse, error) {
 	return &api.GetInfoResponse{
-		FeeReport: &api.FeeReport{
-			MsatBaseCost:        10000,
-			MsatPerUploadedByte: 1,
-			MsatPerDay:          1,
-			MsatPerDownloadByte: 1,
-		},
+		FeeReport: f.fees,
 	},nil
 }
 
@@ -66,7 +65,6 @@ func (f *FileServer) UploadFile(srv api.PrivateFileStore_UploadFileServer) error
 		return status.Error(codes.FailedPrecondition, fmt.Sprintf("unable to get pubkey from metadata"))
 	}
 
-	//paymentChan := make(chan *lnrpc.Payment)
 	// Get Initial Request
 	req, err := srv.Recv()
 	if err != nil {
@@ -76,24 +74,42 @@ func (f *FileServer) UploadFile(srv api.PrivateFileStore_UploadFileServer) error
 	if newFileSlot == nil {
 		return fmt.Errorf("Expected NewFileSlot")
 	}
-	// Return CreationInvoice
-	err = srv.Send(&api.UploadFileResponse{Event:&api.UploadFileResponse_Invoice{Invoice:&api.InvoiceResponse{Invoice:"opening invoice"}}})
-	if err != nil {
-		return err
+	if newFileSlot.DeletionDate < time.Now().UTC().Unix() + 3600 {
+		return fmt.Errorf("minimum store time is 1 hour")
 	}
-	// Wait for invoice paid
+	cost := f.fees.MsatBaseCost
+	paymentChan := make(chan *lnrpc.Invoice)
+	fmt.Printf("\n \t [FS] new Fileslot Request Cost:%v;Fileslot request %v", cost, newFileSlot)
+	defer close(paymentChan)
+	if cost > 0 {
+		// Return CreationInvoice
+		invoice,err := f.lnd.CreateListenInvoice(srv.Context(), paymentChan, &lnrpc.Invoice{
+			Memo:      "Create Fileslot",
+			ValueMsat: f.fees.MsatBaseCost,
+			Expiry:    60,
+		})
+		err = srv.Send(&api.UploadFileResponse{Event:&api.UploadFileResponse_Invoice{Invoice:&api.InvoiceResponse{Invoice:invoice}}})
+		if err != nil {
+			return err
+		}
 
-	//payment := <-paymentChan
-	//if payment.Status != lnrpc.Payment_SUCCEEDED {
-	//	return fmt.Errorf("payment failed: %v",payment.FailureReason)
-	//}
+		// Wait for invoice paid
+		_ = <-paymentChan
+	} else {
+		err = srv.Send(&api.UploadFileResponse{Event:&api.UploadFileResponse_Invoice{Invoice:&api.InvoiceResponse{Invoice:"free"}}})
+		if err != nil {
+			return err
+		}
+	}
+
+
 	// Create FileSlot
 	fileSlot, err := f.fs.NewFile(srv.Context(), pubkey[0], newFileSlot.Filename, newFileSlot.Description, newFileSlot.DeletionDate)
 	if err != nil {
 		return err
 	}
 	// Get FileWriter
-	fileWriter, err := f.fs.GetFileWriter(srv.Context(), pubkey[0], fileSlot.FileName)
+	fileWriter, err := f.fs.GetFileWriter(srv.Context(), pubkey[0], fileSlot.Id)
 	if err != nil {
 		return err
 	}
@@ -107,20 +123,42 @@ func (f *FileServer) UploadFile(srv api.PrivateFileStore_UploadFileServer) error
 		if err != nil {
 			return err
 		}
+
 		switch req.Event.(type){
 		case *api.UploadFileRequest_Finished:
+
+			fmt.Printf("\n \t [FS] Finished Upload")
 			break Loop
 		case *api.UploadFileRequest_Chunk:
 			// Add Bytes
 			chunk := req.GetChunk()
 			_, err := fileWriter.Write(chunk.Content)
 			// Get Invoice
-			// Send Bytes Invoice
-			err = srv.Send(&api.UploadFileResponse{Event:&api.UploadFileResponse_Invoice{Invoice:&api.InvoiceResponse{Invoice:"chunk invoice"}}})
-			if err != nil {
-				return err
+			chunkKB := int64(float64(len(chunk.Content)) / float64(1024))
+			msatCost := f.fees.MsatPerSecondPerKB * (newFileSlot.DeletionDate - time.Now().UTC().Unix()) * chunkKB
+
+			fmt.Printf("\n \t [FS] New Chunk; size: %v; cost: %v;",len(chunk.Content), msatCost )
+			if msatCost > 0 {
+				invoice,err := f.lnd.CreateListenInvoice(srv.Context(), paymentChan, &lnrpc.Invoice{
+					Memo:      "Uploading Chunk",
+					ValueMsat: msatCost,
+					Expiry:    60,
+				})
+				// Send Bytes Invoice
+				err = srv.Send(&api.UploadFileResponse{Event:&api.UploadFileResponse_Invoice{Invoice:&api.InvoiceResponse{Invoice:invoice}}})
+				if err != nil {
+					return err
+				}
+				// Wait for invoice paid
+				payment := <-paymentChan
+				fmt.Printf("\n \t [FS] Invoice paid %v", payment)
+			} else {
+				// Send Bytes Invoice
+				err = srv.Send(&api.UploadFileResponse{Event:&api.UploadFileResponse_Invoice{Invoice:&api.InvoiceResponse{Invoice:"free"}}})
+				if err != nil {
+					return err
+				}
 			}
-			// Wait for invoice paid
 			break
 		}
 	}
@@ -132,6 +170,7 @@ func (f *FileServer) UploadFile(srv api.PrivateFileStore_UploadFileServer) error
 	if err != nil {
 		return err
 	}
+	fmt.Printf("\n \t [FS] File saved %v", fileSlot)
 	return nil
 
 }

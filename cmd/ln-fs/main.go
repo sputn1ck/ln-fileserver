@@ -5,13 +5,15 @@ import (
 	"fmt"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/lightningnetwork/lnd/lnrpc"
+	"github.com/lightningnetwork/lnd/lnrpc/invoicesrpc"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
-	"lndprivatefileserver/api"
-	"lndprivatefileserver/filestore"
-	"lndprivatefileserver/lndutils"
-	"lndprivatefileserver/server"
+	"ln-fileserver/api"
+	"ln-fileserver/filestore"
+	"ln-fileserver/lnd"
+	"ln-fileserver/lndutils"
+	"ln-fileserver/server"
 	"log"
 	"net"
 	"os"
@@ -62,11 +64,14 @@ func main() {
 		log.Panicf("\t [LND] > unable not connect: %v", err)
 	}
 	defer lnConn.Close()
+	invoicesClient := invoicesrpc.NewInvoicesClient(lnConn)
 	lndUtils := lndutils.New(lndClient)
 	_, err = lndClient.GetInfo(context.Background(), &lnrpc.GetInfoRequest{})
 	if err != nil {
 		log.Panicf("\t [LND] > can not get info: %v", err)
 	}
+
+	lndService := lnd.NewService(lndClient, invoicesClient)
 	// Start up grpc services
 	lis, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", grpcPort))
 	if err != nil {
@@ -85,7 +90,11 @@ func main() {
 			grpc_middleware.ChainStreamServer(
 			lndUtils.StreamServerAuthenticationInterceptor,
 			)))
-	fileserver := server.NewFileServer(fileService, lndClient)
+	fileserver := server.NewFileServer(fileService, lndService, &api.FeeReport{
+		MsatBaseCost:        1000,
+		MsatPerDownloadedKB: 1,
+		MsatPerSecondPerKB: 1,
+	})
 	api.RegisterPrivateFileStoreServer(grpcSrv, fileserver)
 	go func() {
 		log.Println("\t [MAIN] > serving grpc")

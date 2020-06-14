@@ -51,9 +51,8 @@ message DownloadFileResponse {
 
 message FeeReport {
     int64 msat_base_cost = 1;
-    int64 msat_per_uploaded_byte = 2;
-    int64 msat_per_day = 3;
-    int64 msat_per_download_byte = 4;
+    int64 msat_per_second_per_k_b = 2;
+    int64 msat_per_downloaded_k_b = 3;
 }
 
 message FileSlot {

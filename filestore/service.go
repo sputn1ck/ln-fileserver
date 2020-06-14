@@ -55,8 +55,8 @@ func (s *Service) GetFileReader(ctx context.Context, pubkey string, fileid strin
 	return f, nil
 }
 
-func (s *Service) GetFileWriter(ctx context.Context, pubkey string, filename string) (*os.File, error) {
-	f, err := os.Create(filepath.Join(s.baseDir, pubkey, filename))
+func (s *Service) GetFileWriter(ctx context.Context, pubkey string, fileid string) (*os.File, error) {
+	f, err := os.Create(filepath.Join(s.baseDir, pubkey, fileid))
 	if err != nil {
 		return nil, err
 	}
@@ -77,6 +77,7 @@ func (s *Service) NewFile(ctx context.Context, pubkey string, filename string, d
 		FileName:     filename,
 		Description:  description,
 		DeletionDate: deleteAt,
+		Id: uuid.NewV4().String(),
 	}, nil
 
 }
@@ -87,7 +88,7 @@ func (s *Service) SaveFile(ctx context.Context, pubkey string, slot *FileSlot, f
 	if err != nil {
 		return nil, err
 	}
-	// Get Sha hash
+	// set Sha hash
 	_,err = file.Seek(0, io.SeekStart)
 	if err != nil {
 		return nil, err
@@ -97,10 +98,14 @@ func (s *Service) SaveFile(ctx context.Context, pubkey string, slot *FileSlot, f
 		return nil, err
 	}
 	slot.Sha256Checksum = hex.EncodeToString(hasher.Sum(nil))
-
+	// set bytes
+	fi, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	slot.Bytes = fi.Size()
 	// set creation date
 	slot.CreationDate = time.Now().UTC().Unix()
-	slot.Id = uuid.NewV4().String()
 	userConfig.FileSlots[slot.Id] = slot
 
 	err = s.store.Update(ctx, userConfig)
