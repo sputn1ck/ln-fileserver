@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package api;
 
+option go_package = "github.com/sputn1ck/ln-fileserver/api";
+
 service PrivateFileStore {
     rpc GetInfo(GetInfoRequest) returns (GetInfoResponse);
     rpc ListFiles(ListFilesRequest) returns (ListFilesResponse);

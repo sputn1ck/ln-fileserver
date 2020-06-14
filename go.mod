@@ -1,4 +1,4 @@
-module ln-fileserver
+module github.com/sputn1ck/ln-fileserver
 
 go 1.13
 

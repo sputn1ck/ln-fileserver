@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 	"github.com/lightningnetwork/lnd/lnrpc"
+	"github.com/sputn1ck/ln-fileserver/api"
+	"github.com/sputn1ck/ln-fileserver/filestore"
+	lnd2 "github.com/sputn1ck/ln-fileserver/lnd"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"io"
-	"ln-fileserver/api"
-	"ln-fileserver/filestore"
-	lnd2 "ln-fileserver/lnd"
 	"time"
 )
 
@@ -216,7 +216,7 @@ func (f *FileServer) DownloadFile(req *api.DownloadFileRequest, srv api.PrivateF
 			break
 		}
 		chunkKB := int64(float64(len(buf[:n])) / float64(1024))
-		msatCost := f.fees.MsatPerDownloadedKB * (chunkKB + 1)
+		msatCost := f.fees.MsatPerHourPerKB * (chunkKB + 1)
 		fmt.Printf("Download chunk cost: %v", msatCost)
 		if msatCost > 0 {
 			if msatCost < 1000 {
