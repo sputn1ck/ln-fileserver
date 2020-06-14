@@ -128,19 +128,23 @@ var uploadFileCommand = cli.Command{
 			Required: true,
 		},
 		cli.Int64Flag{
-			Name:  "deletion_date",
-			Usage: "unix timestamp of planned deletion",
+			Name:  "store_duration",
+			Usage: "duration of storage in seconds",
 			Required: true,
 		},
 		cli.IntFlag{
 			Name:  "chunk_size",
-			Usage: "bytesize of chunks that gets uploaded (default 128kb)",
-			Value: 1024*128,
+			Usage: "bytesize of chunks that gets uploaded (default 1mb)",
+			Value: 1024*1024,
 		},
 		cli.StringFlag{
 			Name:  "description",
 			Usage: "description of file",
 			Value: "",
+		},
+		cli.BoolFlag{
+			Name:  "force",
+			Usage: "if set doesnt wait for fee confirmation",
 		},
 	},
 	Action: uploadFile,
@@ -151,10 +155,26 @@ func uploadFile(ctx *cli.Context) error {
 	ctxb := context.Background()
 	lnfs, lnd, cleanUp := getClients(ctx)
 	defer cleanUp()
+	totalMsats := int64(0)
 	// open file
 	file, err := os.Open(ctx.String("file"))
 	if err != nil {
 		return fmt.Errorf("Error opening file %v", err)
+	}
+	if !ctx.Bool("force") {
+		getinfo, err := lnfs.GetInfo(ctxb, &api.GetInfoRequest{})
+		if err != nil {
+			return err
+		}
+		fee, err := estimateUploadFileFee(file, ctx.Int64("store_duration"), getinfo.FeeReport)
+		if err != nil {
+			return err
+		}
+		fmt.Printf(fmt.Sprintf("\n Uploading file: %v, Estimated fee: %v", file.Name(), fee))
+		do := promptForConfirmation("\n Confirm upload (yes/no): ")
+		if !do {
+			return fmt.Errorf("aborted upload")
+		}
 	}
 	stream, err := lnfs.UploadFile(ctxb)
 	if err != nil {
@@ -165,7 +185,7 @@ func uploadFile(ctx *cli.Context) error {
 
 	// send opening request
 	err = stream.Send(&api.UploadFileRequest{Event: &api.UploadFileRequest_Slot{Slot: &api.NewFileSlot{
-		DeletionDate: time.Now().UTC().Unix() + ctx.Int64("deletion_date"),
+		DeletionDate: time.Now().UTC().Unix() + ctx.Int64("store_duration"),
 		Filename:     filepath.Base(file.Name()),
 		Description:  ctx.String("description"),
 	}}})
@@ -186,6 +206,7 @@ func uploadFile(ctx *cli.Context) error {
 		if payment.PaymentError != "" {
 			return fmt.Errorf("Payment failed %s", payment.PaymentError)
 		}
+		totalMsats += payment.PaymentRoute.TotalAmtMsat
 	}
 	writing := true
 	for writing {
@@ -216,6 +237,7 @@ func uploadFile(ctx *cli.Context) error {
 			if payment.PaymentError != "" {
 				return fmt.Errorf("Payment failed %s", payment.PaymentError)
 			}
+			totalMsats += payment.PaymentRoute.TotalAmtMsat
 		}
 	}
 	err = stream.Send(&api.UploadFileRequest{Event: &api.UploadFileRequest_Finished{Finished: &api.Empty{}}})
@@ -228,6 +250,7 @@ func uploadFile(ctx *cli.Context) error {
 	}
 	finished := res.GetFinishedFile()
 	printRespJSON(finished)
+	fmt.Printf("\n Paid a total of %v mSats", totalMsats)
 	return nil
 }
 
