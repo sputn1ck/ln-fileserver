@@ -20,6 +20,9 @@ import (
 func init() {
 	pflag.String("lndconnect", "", "londconnect uri to lnd node")
 	pflag.String("target", "localhost:9090", "target fileserver")
+	
+	pflag.Parse()
+
 	if err := viper.BindPFlags(pflag.CommandLine); err != nil {
 		log.Panicf("could not bind pflags: %v", err)
 	}

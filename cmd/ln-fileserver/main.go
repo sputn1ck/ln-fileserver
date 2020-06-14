@@ -25,6 +25,9 @@ func init() {
 	pflag.String("lndconnect", "", "londconnect uri to lnd node")
 	pflag.Uint64("grpc_port", 9090, "port to listen for incoming grpc connections")
 	pflag.String("data_dir", "", "location of data directory")
+
+	pflag.Parse()
+
 	// Bind environmental variables to flags. Will be overwritten by flags
 	if err := viper.BindPFlags(pflag.CommandLine); err != nil {
 		log.Panicf("could not bind pflags: %v", err)
