@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
@@ -11,8 +12,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
+
 func printRespJSON(resp proto.Message) {
 	jsonMarshaler := &jsonpb.Marshaler{
 		EmitDefaults: true,
@@ -29,13 +32,11 @@ func printRespJSON(resp proto.Message) {
 	fmt.Println(jsonStr)
 }
 
-
 var getInfoCommand = cli.Command{
 	Name:   "getinfo",
 	Usage:  "returns information of ln-fileserver",
 	Action: getInfo,
 }
-
 
 func getInfo(ctx *cli.Context) error {
 	ctxb := context.Background()
@@ -50,8 +51,8 @@ func getInfo(ctx *cli.Context) error {
 }
 
 var listFilesCommnad = cli.Command{
-	Name: "listfiles",
-	Usage: "returns all user owned files",
+	Name:   "listfiles",
+	Usage:  "returns all user owned files",
 	Action: listFiles,
 }
 
@@ -68,10 +69,10 @@ func listFiles(ctx *cli.Context) error {
 }
 
 var uploadFileCommand = cli.Command{
-	Name:   "upload",
-	Usage:  "uploads a file to the ln-fileserver",
+	Name:      "upload",
+	Usage:     "uploads a file to the ln-fileserver",
 	ArgsUsage: "file",
-	Flags:  []cli.Flag{
+	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:      "file",
 			Usage:     "path to file to upload",
@@ -174,17 +175,17 @@ func uploadFile(ctx *cli.Context) error {
 }
 
 var downloadFileCommand = cli.Command{
-	Name:   "download",
-	Usage:  "downloads ln-fileserver",
+	Name:      "download",
+	Usage:     "downloads ln-fileserver",
 	ArgsUsage: "id",
-	Flags:  []cli.Flag{
+	Flags: []cli.Flag{
 		cli.StringFlag{
-			Name:      "id",
-			Usage:     "id of the file to download",
+			Name:  "id",
+			Usage: "id of the file to download",
 		},
 		cli.StringFlag{
-			Name:      "dir",
-			Usage:     "where to download to",
+			Name:  "dir",
+			Usage: "where to download to",
 			Value: ".",
 		},
 	},
@@ -255,4 +256,32 @@ Loop:
 		return err
 	}
 	return nil
+}
+
+func promptForConfirmation(msg string) bool {
+	reader := bufio.NewReader(os.Stdin)
+
+	for {
+		fmt.Print(msg)
+
+		answer, err := reader.ReadString('\n')
+		if err != nil {
+			return false
+		}
+
+		answer = strings.ToLower(strings.TrimSpace(answer))
+
+		switch {
+		case answer == "yes":
+			return true
+		case answer == "no":
+			return false
+		default:
+			continue
+		}
+	}
+}
+
+func estimateFee(filesize int, storetime int, fees *api.FeeReport) int64 {
+
 }

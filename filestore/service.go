@@ -63,7 +63,7 @@ func (s *Service) NewFile(ctx context.Context, pubkey string, filename string, d
 	} else if err != nil {
 		return nil, err
 	}
-	id,err := uuid.NewV4()
+	id, err := uuid.NewV4()
 	if err != nil {
 		return nil, err
 	}

@@ -1,6 +1,6 @@
 # ln-fileserver
 
-ln-fileserver is a work-in-progress file server which uses lnds signmessage api to authenticate users. Its upload and download fees can be heavily customized to allow for economic usage.
+ln-fileserver is a work-in-progress file server which uses lnds signmessage api to authenticate users. Its fees can be customized to allow for economic usage.
 
 The main goal is to store channel backups, so that users are able to restore their lightning node using only their seed.
 
@@ -8,7 +8,6 @@ The main goal is to store channel backups, so that users are able to restore the
 - install with ```go get github.com/sputn1ck/ln-fileserver/...```
 - run with ```ln-fileserver --lndconnect="LND_CONNECT_STRING" --data_dir="path/to/data/dir" --grpc_port=9090```
 - cli can be run with ```lnfscli```
-- it always need the lndconnect string ```lnfscli --lndconnect="LND_CONNECT_STRING getinfo``` (you can create an alias)
 ## fees
 
 current fee options are:
