@@ -7,6 +7,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/lightningnetwork/lnd/lnrpc"
 	"github.com/sputn1ck/ln-fileserver/api"
+	"github.com/sputn1ck/ln-fileserver/utils"
 	"github.com/urfave/cli"
 	"golang.org/x/net/context"
 	"io"
@@ -67,7 +68,54 @@ func listFiles(ctx *cli.Context) error {
 	printRespJSON(res)
 	return nil
 }
+var estimateUploadFeeCommand = cli.Command{
+	Name:      "uploadfee",
+	Usage:     "",
+	ArgsUsage: "",
+	Flags:     []cli.Flag{
+		cli.StringFlag{
+			Name:      "file",
+			Usage:     "path to file to upload",
+			TakesFile: true,
+			Required: true,
+		},
+		cli.Int64Flag{
+			Name:  "store_time",
+			Usage: "storage time in seconds",
+			Required: true,
+		},},
+	Action:    estimateUploadFee,
+}
+func estimateUploadFee(ctx *cli.Context) error {
+	ctxb := context.Background()
+	lnfs, _, cleanUp := getClients(ctx)
+	defer cleanUp()
+	// open file
+	file, err := os.Open(ctx.String("file"))
+	if err != nil {
+		return err
+	}
+	getinfo, err := lnfs.GetInfo(ctxb, &api.GetInfoRequest{})
+	if err != nil {
+		return err
+	}
+	fee, err := estimateUploadFileFee(file, ctx.Int64("store_time"), getinfo.FeeReport)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("\n File: %s, fee: %v", file.Name(), fee)
+	return nil
+}
 
+func estimateUploadFileFee(file *os.File, storetime int64, fees *api.FeeReport) (int64, error) {
+	fi, err := file.Stat()
+	if err != nil {
+		return 0, err
+	}
+	totalCost := fees.MsatBaseCost
+	totalCost+=utils.GetTotalUploadFee(fi.Size(), storetime, fees)
+	return totalCost, nil
+}
 var uploadFileCommand = cli.Command{
 	Name:      "upload",
 	Usage:     "uploads a file to the ln-fileserver",
@@ -77,6 +125,22 @@ var uploadFileCommand = cli.Command{
 			Name:      "file",
 			Usage:     "path to file to upload",
 			TakesFile: true,
+			Required: true,
+		},
+		cli.Int64Flag{
+			Name:  "deletion_date",
+			Usage: "unix timestamp of planned deletion",
+			Required: true,
+		},
+		cli.IntFlag{
+			Name:  "chunk_size",
+			Usage: "bytesize of chunks that gets uploaded (default 128kb)",
+			Value: 1024*128,
+		},
+		cli.StringFlag{
+			Name:  "description",
+			Usage: "description of file",
+			Value: "",
 		},
 	},
 	Action: uploadFile,
@@ -84,13 +148,6 @@ var uploadFileCommand = cli.Command{
 
 func uploadFile(ctx *cli.Context) error {
 
-	if ctx.NArg() == 0 && ctx.NumFlags() == 0 {
-		cli.ShowCommandHelp(ctx, "upload")
-		return nil
-	}
-	if !ctx.IsSet("file") {
-		return fmt.Errorf("file flag must be set")
-	}
 	ctxb := context.Background()
 	lnfs, lnd, cleanUp := getClients(ctx)
 	defer cleanUp()
@@ -104,13 +161,13 @@ func uploadFile(ctx *cli.Context) error {
 		return fmt.Errorf("Error opening stream %v", err)
 	}
 	// create chunk buffer with 1mb
-	buf := make([]byte, 1024*1024)
+	buf := make([]byte, ctx.Int("chunk_size"))
 
 	// send opening request
 	err = stream.Send(&api.UploadFileRequest{Event: &api.UploadFileRequest_Slot{Slot: &api.NewFileSlot{
-		DeletionDate: time.Now().UTC().Unix() + 86400,
+		DeletionDate: time.Now().UTC().Unix() + ctx.Int64("deletion_date"),
 		Filename:     filepath.Base(file.Name()),
-		Description:  "foo",
+		Description:  ctx.String("description"),
 	}}})
 	if err != nil {
 		return fmt.Errorf("Error sending opening req %v", err)
@@ -282,6 +339,4 @@ func promptForConfirmation(msg string) bool {
 	}
 }
 
-func estimateFee(filesize int, storetime int, fees *api.FeeReport) int64 {
 
-}

@@ -7,6 +7,7 @@ import (
 	"github.com/sputn1ck/ln-fileserver/api"
 	"github.com/sputn1ck/ln-fileserver/filestore"
 	lnd2 "github.com/sputn1ck/ln-fileserver/lnd"
+	"github.com/sputn1ck/ln-fileserver/utils"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -100,7 +101,7 @@ func (f *FileServer) UploadFile(srv api.PrivateFileStore_UploadFileServer) error
 			return err
 		}
 	}
-
+	startTime := time.Now().UTC().Unix()
 	// Create FileSlot
 	fileSlot, err := f.fs.NewFile(srv.Context(), pubkey[0], newFileSlot.Filename, newFileSlot.Description, newFileSlot.DeletionDate)
 	if err != nil {
@@ -132,10 +133,7 @@ Loop:
 			chunk := req.GetChunk()
 			_, err := fileWriter.Write(chunk.Content)
 			// Get Invoice
-			chunkKB := int64(float64(len(chunk.Content)) / float64(1024))
-			hoursStored := (newFileSlot.DeletionDate - time.Now().UTC().Unix()) / 3600
-			msatCost := f.fees.MsatPerHourPerKB * hoursStored * (chunkKB + 1)
-
+			msatCost := utils.GetUploadChunkFee(len(chunk.Content), newFileSlot.DeletionDate - startTime, f.fees)
 			fmt.Printf("\n \t [FS] New Chunk; size: %v; cost: %v;", len(chunk.Content), msatCost)
 			if msatCost > 0 {
 				if msatCost < 1000 {
@@ -215,8 +213,7 @@ func (f *FileServer) DownloadFile(req *api.DownloadFileRequest, srv api.PrivateF
 			reading = false
 			break
 		}
-		chunkKB := int64(float64(len(buf[:n])) / float64(1024))
-		msatCost := f.fees.MsatPerHourPerKB * (chunkKB + 1)
+		msatCost := utils.GetDownloadChunkFee(len(buf[:n]), f.fees)
 		fmt.Printf("Download chunk cost: %v", msatCost)
 		if msatCost > 0 {
 			if msatCost < 1000 {

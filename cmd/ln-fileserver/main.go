@@ -25,7 +25,9 @@ func init() {
 	pflag.String("lndconnect", "", "londconnect uri to lnd node")
 	pflag.Uint64("grpc_port", 9090, "port to listen for incoming grpc connections")
 	pflag.String("data_dir", "", "location of data directory")
-
+	pflag.Int64("msat_base_fee", 1000, "msat base fee on upload request")
+	pflag.Int64("msat_per_kb_per_hour", 1, "msats per kilobyte per hour stored")
+	pflag.Int64("msat_per_kb_downloaded",1, "msats per kb downloaded")
 	pflag.Parse()
 
 	// Bind environmental variables to flags. Will be overwritten by flags
@@ -47,6 +49,9 @@ func main() {
 		lndconnect string = viper.GetString("lndconnect")
 		grpcPort   uint64 = viper.GetUint64("grpc_port")
 		dataDir    string = viper.GetString("data_dir")
+		msatBase int64 = viper.GetInt64("msat_base_fee")
+		msatKbHour int64 = viper.GetInt64("msat_per_kb_per_hour")
+		msatDownloaded int64 = viper.GetInt64("msat_per_kb_downloaded")
 	)
 
 	// Global context
@@ -94,9 +99,9 @@ func main() {
 				lndUtils.StreamServerAuthenticationInterceptor,
 			)))
 	fileserver := server.NewFileServer(fileService, lndService, &api.FeeReport{
-		MsatBaseCost:        0,
-		MsatPerDownloadedKB: 0,
-		MsatPerHourPerKB:    0,
+		MsatBaseCost:        msatBase,
+		MsatPerDownloadedKB: msatDownloaded,
+		MsatPerHourPerKB:    msatKbHour,
 	})
 	api.RegisterPrivateFileStoreServer(grpcSrv, fileserver)
 	go func() {
