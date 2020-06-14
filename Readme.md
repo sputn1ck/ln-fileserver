@@ -8,6 +8,27 @@ The main goal is to store channel backups, so that users are able to restore the
 - install with ```go get github.com/sputn1ck/ln-fileserver/...```
 - run with ```ln-fileserver --lndconnect="LND_CONNECT_STRING" --data_dir="path/to/data/dir" --grpc_port=9090```
 - cli can be run with ```lnfscli```
+## lnfscli
+```
+NAME:
+   lnfscli - cli for lightning network fileserver
+
+USAGE:
+   lnfscli [global options] command [command options] [arguments...]
+
+COMMANDS:
+   getinfo    returns information of ln-fileserver
+   listfiles  returns all user owned files
+   upload     uploads a file to the ln-fileserver
+   download   downloads ln-fileserver
+   uploadfee  estimates an uploadfee
+   help, h    Shows a list of commands or help for one command
+
+GLOBAL OPTIONS:
+   --lndconnect value  lndconnect string
+   --target value      target fileserver host (default: "localhost:9090")
+   --help, -h          show help
+```
 ## fees
 
 current fee options are:

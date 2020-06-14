@@ -70,7 +70,7 @@ func listFiles(ctx *cli.Context) error {
 }
 var estimateUploadFeeCommand = cli.Command{
 	Name:      "uploadfee",
-	Usage:     "",
+	Usage:     "estimates an uploadfee",
 	ArgsUsage: "",
 	Flags:     []cli.Flag{
 		cli.StringFlag{
