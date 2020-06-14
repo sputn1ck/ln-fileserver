@@ -33,7 +33,7 @@ message UploadFileRequest {
 message UploadFileResponse {
     oneof event {
         InvoiceResponse invoice = 1;
-        FileSlot finished_backup = 2;
+        FileSlot finished_file = 2;
     }
 }
 
@@ -57,16 +57,19 @@ message FeeReport {
 }
 
 message FileSlot {
-    string id = 1;
-    string description = 2;
-    int64 creation_date = 3;
-    int64 deletion_date = 4;
-    int64 byte_count = 5;
+    string file_id = 1;
+    string filename = 2;
+    string description = 3;
+    string sha_checksum = 4;
+    int64 bytes = 5;
+    int64 creation_date = 6;
+    int64 deletion_date = 7;
 }
 
 message NewFileSlot {
     int64 deletion_date = 1;
-    string description = 2;
+    string filename = 2;
+    string description = 3;
 }
 
 message FileChunk {
