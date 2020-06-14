@@ -63,11 +63,15 @@ func (s *Service) NewFile(ctx context.Context, pubkey string, filename string, d
 	} else if err != nil {
 		return nil, err
 	}
+	id,err := uuid.NewV4()
+	if err != nil {
+		return nil, err
+	}
 	return &FileSlot{
 		FileName:     filename,
 		Description:  description,
 		DeletionDate: deleteAt,
-		Id:           uuid.NewV4().String(),
+		Id:           id.String(),
 	}, nil
 
 }
