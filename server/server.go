@@ -135,10 +135,14 @@ func (f *FileServer) UploadFile(srv api.PrivateFileStore_UploadFileServer) error
 			_, err := fileWriter.Write(chunk.Content)
 			// Get Invoice
 			chunkKB := int64(float64(len(chunk.Content)) / float64(1024))
-			msatCost := f.fees.MsatPerSecondPerKB * (newFileSlot.DeletionDate - time.Now().UTC().Unix()) * chunkKB
+			hoursStored := (newFileSlot.DeletionDate - time.Now().UTC().Unix()) / 3600
+			msatCost := f.fees.MsatPerHourPerKB * hoursStored * (chunkKB + 1)
 
 			fmt.Printf("\n \t [FS] New Chunk; size: %v; cost: %v;",len(chunk.Content), msatCost )
 			if msatCost > 0 {
+				if msatCost < 1000 {
+					msatCost = 1000
+				}
 				invoice,err := f.lnd.CreateListenInvoice(srv.Context(), paymentChan, &lnrpc.Invoice{
 					Memo:      "Uploading Chunk",
 					ValueMsat: msatCost,
@@ -176,9 +180,9 @@ func (f *FileServer) UploadFile(srv api.PrivateFileStore_UploadFileServer) error
 }
 
 
-func (f *FileServer) DownloadFile(req *api.DownloadFileRequest, res api.PrivateFileStore_DownloadFileServer) error {
-	// todo implement me
-	md, ok := metadata.FromIncomingContext(res.Context())
+func (f *FileServer) DownloadFile(req *api.DownloadFileRequest, srv api.PrivateFileStore_DownloadFileServer) error {
+	ctx := srv.Context()
+	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return status.Error(codes.Internal, fmt.Sprintf("unable to read metadata"))
 	}
@@ -187,6 +191,74 @@ func (f *FileServer) DownloadFile(req *api.DownloadFileRequest, res api.PrivateF
 	if len(pubkey) != 1 {
 		return status.Error(codes.FailedPrecondition, fmt.Sprintf("unable to get pubkey from metadata"))
 	}
+
+
+	fmt.Printf("\n \t [FS] Requesting download %v", req.FileId)
+	// Get fileslot
+	fileSlot, err := f.fs.GetFile(ctx, pubkey[0], req.FileId)
+	if err != nil {
+		return err
+	}
+	err = srv.Send(&api.DownloadFileResponse{Event: &api.DownloadFileResponse_FileInfo{FileInfo: f.YmlFileSlotToProto(req.FileId, fileSlot)}})
+	if err != nil {
+		return err
+	}
+	// open filereader
+	file, err := f.fs.GetFileReader(ctx,pubkey[0],req.FileId)
+	if err != nil {
+		return err
+	}
+	// create chunk buffer with 1mb
+	buf := make([]byte, 1024*1024)
+	paymentChan := make(chan *lnrpc.Invoice)
+	defer close(paymentChan)
+	reading := true
+	for reading {
+		n, err := file.Read(buf)
+		if err == io.EOF {
+			reading = false
+			break
+		}
+		chunkKB := int64(float64(len(buf[:n])) / float64(1024))
+		msatCost := f.fees.MsatPerDownloadedKB * (chunkKB + 1)
+		fmt.Printf("Download chunk cost: %v", msatCost)
+		if msatCost > 0 {
+			if msatCost < 1000 {
+				msatCost = 1000
+			}
+			invoice,err := f.lnd.CreateListenInvoice(srv.Context(), paymentChan, &lnrpc.Invoice{
+				Memo:      "Downloading chunk",
+				ValueMsat: msatCost,
+				Expiry:    60,
+			})
+			// Send Bytes Invoice
+			err = srv.Send(&api.DownloadFileResponse{Event:&api.DownloadFileResponse_Invoice{Invoice:&api.InvoiceResponse{Invoice:invoice}}})
+			if err != nil {
+				return err
+			}
+			// Wait for invoice paid
+			payment := <-paymentChan
+			fmt.Printf("\n \t [FS] Invoice paid %v", payment)
+		} else {
+			// Send Bytes Invoice
+			err = srv.Send(&api.DownloadFileResponse{Event:&api.DownloadFileResponse_Invoice{Invoice:&api.InvoiceResponse{Invoice:"free"}}})
+			if err != nil {
+				return err
+			}
+		}
+		err = srv.Send(&api.DownloadFileResponse{Event:&api.DownloadFileResponse_Chunk{Chunk:&api.FileChunk{
+			Content:buf[:n],
+		}}})
+		if err != nil {
+			return fmt.Errorf("\n [FS] > Error sending chunk req %v", err)
+		}
+	}
+
+	err = srv.Send(&api.DownloadFileResponse{Event:&api.DownloadFileResponse_Finished{Finished:&api.Empty{}}})
+	if err != nil {
+		return err
+	}
+	fmt.Printf("\n \t [FS] File downloaded %v", fileSlot)
 	return nil
 
 }

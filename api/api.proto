@@ -43,15 +43,16 @@ message DownloadFileRequest {
 
 message DownloadFileResponse {
     oneof event {
-        InvoiceResponse invoice = 1;
-        FileChunk chunk = 2;
-        Empty finished = 3;
+        FileSlot file_info = 1;
+        InvoiceResponse invoice = 2;
+        FileChunk chunk = 3;
+        Empty finished = 4;
     }
 }
 
 message FeeReport {
     int64 msat_base_cost = 1;
-    int64 msat_per_second_per_k_b = 2;
+    int64 msat_per_hour_per_k_b = 2;
     int64 msat_per_downloaded_k_b = 3;
 }
 

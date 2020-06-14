@@ -39,16 +39,7 @@ func (s *Service) ListFiles(ctx context.Context, pubkey string) (map[string]*Fil
 }
 
 func (s *Service) GetFileReader(ctx context.Context, pubkey string, fileid string) (*os.File, error) {
-	userConfig, err := s.store.Read(ctx, pubkey)
-	if err != nil {
-		return nil, err
-	}
-	var fileSlot *FileSlot
-	var ok bool
-	if fileSlot, ok = userConfig.FileSlots[fileid] ; !ok {
-		return nil, fmt.Errorf("fileid not found")
-	}
-	f, err := os.Open(filepath.Join(s.baseDir, pubkey, fileSlot.FileName))
+	f, err := os.Open(filepath.Join(s.baseDir, pubkey, fileid))
 	if err != nil {
 		return nil, err
 	}
@@ -113,4 +104,16 @@ func (s *Service) SaveFile(ctx context.Context, pubkey string, slot *FileSlot, f
 		return nil, err
 	}
 	return slot, nil
+}
+
+func (s *Service) GetFile(ctx context.Context, pubkey string, fileid string) (*FileSlot ,error) {
+	// Get User Config
+	userConfig, err := s.store.Read(ctx, pubkey)
+	if err != nil {
+		return nil, err
+	}
+	if val, ok := userConfig.FileSlots[fileid]; ok {
+		return val, nil
+	}
+	return nil, fmt.Errorf("File not found or user does not own file")
 }

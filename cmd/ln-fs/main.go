@@ -93,7 +93,7 @@ func main() {
 	fileserver := server.NewFileServer(fileService, lndService, &api.FeeReport{
 		MsatBaseCost:        1000,
 		MsatPerDownloadedKB: 1,
-		MsatPerSecondPerKB: 1,
+		MsatPerHourPerKB: 1,
 	})
 	api.RegisterPrivateFileStoreServer(grpcSrv, fileserver)
 	go func() {
