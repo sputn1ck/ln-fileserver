@@ -262,11 +262,16 @@ var downloadFileCommand = cli.Command{
 		cli.StringFlag{
 			Name:  "id",
 			Usage: "id of the file to download",
+			Required: true,
 		},
 		cli.StringFlag{
 			Name:  "dir",
 			Usage: "where to download to",
 			Value: ".",
+		},
+		cli.BoolFlag{
+			Name:  "force",
+			Usage: "if set doesnt wait for fee confirmation",
 		},
 	},
 	Action: downloadFile,
@@ -276,6 +281,8 @@ func downloadFile(ctx *cli.Context) error {
 	ctxb := context.Background()
 	lnfs, lnd, cleanUp := getClients(ctx)
 	defer cleanUp()
+
+	totalMsats := int64(0)
 	// open file
 	stream, err := lnfs.DownloadFile(ctxb, &api.DownloadFileRequest{FileId: ctx.String("id")})
 	if err != nil {
@@ -288,6 +295,18 @@ func downloadFile(ctx *cli.Context) error {
 	fileInfo := res.GetFileInfo()
 	if fileInfo == nil {
 		return fmt.Errorf("fileinfo expected")
+	}
+	if (!ctx.Bool("force")) {
+		getinfo, err := lnfs.GetInfo(ctxb, &api.GetInfoRequest{})
+		if err != nil {
+			return err
+		}
+		totalFee := utils.GetTotalDownloadFee(fileInfo.Bytes, getinfo.FeeReport)
+		fmt.Printf(fmt.Sprintf("\n Download file: %v, Estimated fee: %v", fileInfo.Filename, totalFee))
+		do := promptForConfirmation("\n Confirm download (yes/no): ")
+		if !do {
+			return fmt.Errorf("aborted download")
+		}
 	}
 	file, err := os.Create(filepath.Join(ctx.String("dir"), fileInfo.Filename))
 	if err != nil {
@@ -328,6 +347,7 @@ Loop:
 				if payment.PaymentError != "" {
 					return fmt.Errorf("Payment failed %s", payment.PaymentError)
 				}
+				totalMsats += payment.PaymentRoute.TotalAmtMsat
 			}
 		}
 	}
@@ -335,6 +355,8 @@ Loop:
 	if err != nil {
 		return err
 	}
+
+	fmt.Printf("\n Paid a total of %v mSats", totalMsats)
 	return nil
 }
 

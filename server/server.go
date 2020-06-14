@@ -54,6 +54,8 @@ func (f *FileServer) ListFiles(ctx context.Context, req *api.ListFilesRequest) (
 }
 
 func (f *FileServer) UploadFile(srv api.PrivateFileStore_UploadFileServer) error {
+	startTime := time.Now().UTC().Unix()
+
 	// todo invoice stuff
 	md, ok := metadata.FromIncomingContext(srv.Context())
 	if !ok {
@@ -74,12 +76,14 @@ func (f *FileServer) UploadFile(srv api.PrivateFileStore_UploadFileServer) error
 	if newFileSlot == nil {
 		return fmt.Errorf("Expected NewFileSlot")
 	}
-	if newFileSlot.DeletionDate < time.Now().UTC().Unix()+3600 {
+	storeTime := newFileSlot.DeletionDate - startTime
+	if storeTime < 3600 {
 		return fmt.Errorf("minimum store time is 1 hour")
 	}
 	cost := f.fees.MsatBaseCost
 	paymentChan := make(chan *lnrpc.Invoice)
-	fmt.Printf("\n \t [FS] new Fileslot Request Cost:%v;Fileslot request %v", cost, newFileSlot)
+
+	fmt.Printf("\n \t [FS] new Fileslot Request Cost:%v;Store Time: %v;Fileslot request %v", cost, storeTime,newFileSlot)
 	defer close(paymentChan)
 	if cost > 0 {
 		// Return CreationInvoice
@@ -101,7 +105,6 @@ func (f *FileServer) UploadFile(srv api.PrivateFileStore_UploadFileServer) error
 			return err
 		}
 	}
-	startTime := time.Now().UTC().Unix()
 	// Create FileSlot
 	fileSlot, err := f.fs.NewFile(srv.Context(), pubkey[0], newFileSlot.Filename, newFileSlot.Description, newFileSlot.DeletionDate)
 	if err != nil {
@@ -133,7 +136,7 @@ Loop:
 			chunk := req.GetChunk()
 			_, err := fileWriter.Write(chunk.Content)
 			// Get Invoice
-			msatCost := utils.GetUploadChunkFee(len(chunk.Content), newFileSlot.DeletionDate - startTime, f.fees)
+			msatCost := utils.GetUploadChunkFee(len(chunk.Content), storeTime, f.fees)
 			fmt.Printf("\n \t [FS] New Chunk; size: %v; cost: %v;", len(chunk.Content), msatCost)
 			if msatCost > 0 {
 				if msatCost < 1000 {
